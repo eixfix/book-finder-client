@@ -43,6 +43,11 @@ type BookResponse = {
   };
 };
 
+type BookshelfResponse = {
+  data: BookshelfBook[];
+  paging: { limit: number; offset: number; total: number };
+};
+
 export default function BookshelfPage() {
   const router = useRouter();
   const [isAuthed, setIsAuthed] = useState(false);
@@ -52,6 +57,10 @@ export default function BookshelfPage() {
   const [isbnQuery, setIsbnQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [shelfQuery, setShelfQuery] = useState("");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const limit = 50;
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,13 +110,15 @@ export default function BookshelfPage() {
     if (isbnQuery.trim()) params.set("isbn", isbnQuery.trim());
     if (locationQuery.trim()) params.set("location", locationQuery.trim());
     if (shelfQuery.trim()) params.set("shelf", shelfQuery.trim());
-    params.set("limit", "50");
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
     try {
-      const response = await apiFetch<{ data: BookshelfBook[] }>(
+      const response = await apiFetch<BookshelfResponse>(
         `/api/bookshelf?${params.toString()}`
       );
       if (active.value) {
         setItems(response.data);
+        setTotalCount(response.paging.total);
       }
     } catch {
       if (active.value) {
@@ -131,7 +142,11 @@ export default function BookshelfPage() {
       isActive.value = false;
       clearTimeout(timeout);
     };
-  }, [titleQuery, authorQuery, isbnQuery, locationQuery, shelfQuery, isAuthed]);
+  }, [titleQuery, authorQuery, isbnQuery, locationQuery, shelfQuery, offset, isAuthed]);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [titleQuery, authorQuery, isbnQuery, locationQuery, shelfQuery]);
 
   if (!isAuthed) {
     return (
@@ -325,7 +340,7 @@ export default function BookshelfPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] px-4 pb-24 pt-6">
       <div className="mx-auto flex max-w-screen-md flex-col gap-4">
-        <header className="rounded-2xl border bg-white p-5 shadow-sm">
+        <header className="sticky top-4 z-20 rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold">Bookshelf</h1>
@@ -352,31 +367,41 @@ export default function BookshelfPage() {
               value={authorQuery}
               onChange={(event) => setAuthorQuery(event.target.value)}
             />
-            <input
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              placeholder="ISBN"
-              value={isbnQuery}
-              onChange={(event) => setIsbnQuery(event.target.value)}
-            />
-            <select
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              value={locationQuery}
-              onChange={(event) => setLocationQuery(event.target.value)}
-            >
-              <option value="">All locations</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.name}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              placeholder="Shelf"
-              value={shelfQuery}
-              onChange={(event) => setShelfQuery(event.target.value)}
-            />
           </div>
+          <button
+            className="mt-3 text-xs text-neutral-500 underline"
+            onClick={() => setShowMoreFilters((prev) => !prev)}
+          >
+            {showMoreFilters ? "Hide filters" : "More filters"}
+          </button>
+          {showMoreFilters ? (
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <input
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                placeholder="ISBN"
+                value={isbnQuery}
+                onChange={(event) => setIsbnQuery(event.target.value)}
+              />
+              <select
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                value={locationQuery}
+                onChange={(event) => setLocationQuery(event.target.value)}
+              >
+                <option value="">All locations</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.name}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                placeholder="Shelf"
+                value={shelfQuery}
+                onChange={(event) => setShelfQuery(event.target.value)}
+              />
+            </div>
+          ) : null}
           {isLoading ? (
             <p className="mt-2 text-xs text-neutral-500">Loading...</p>
           ) : null}
@@ -384,26 +409,51 @@ export default function BookshelfPage() {
         </section>
 
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
-          {items.length === 0 ? (
-            <p className="text-sm text-neutral-500">No bookshelf items yet.</p>
-          ) : (
-            <ul className="space-y-3 text-sm">
-              {items.map((item) => (
-                <button
-                  key={item.book_id}
-                  className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-left"
-                  onClick={() => openDetail(item)}
-                >
-                  <div className="text-sm font-semibold">{item.title}</div>
-                  <div className="text-xs text-neutral-600">{item.author}</div>
-                  <div className="mt-1 text-xs text-neutral-500">ISBN {item.isbn}</div>
-                  <div className="mt-2 text-xs text-neutral-600">
-                    {item.holdings.length} shelves · qty {item.total_qty}
-                  </div>
-                </button>
-              ))}
-            </ul>
-          )}
+          <div className="max-h-[50vh] overflow-y-auto">
+            {items.length === 0 ? (
+              <p className="text-sm text-neutral-500">No bookshelf items yet.</p>
+            ) : (
+              <ul className="space-y-3 text-sm">
+                {items.map((item) => (
+                  <button
+                    key={item.book_id}
+                    className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-left"
+                    onClick={() => openDetail(item)}
+                  >
+                    <div className="text-sm font-semibold">{item.title}</div>
+                    <div className="text-xs text-neutral-600">{item.author}</div>
+                    <div className="mt-1 text-xs text-neutral-500">ISBN {item.isbn}</div>
+                    <div className="mt-2 text-xs text-neutral-600">
+                      {item.holdings.length} shelves · qty {item.total_qty}
+                    </div>
+                  </button>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+            <span>
+              {totalCount === 0
+                ? "0 results"
+                : `${offset + 1}-${Math.min(offset + limit, totalCount)} of ${totalCount}`}
+            </span>
+            <div className="flex gap-2">
+              <button
+                className="rounded-lg border border-neutral-300 px-3 py-1 disabled:opacity-60"
+                onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
+                disabled={offset === 0}
+              >
+                Previous
+              </button>
+              <button
+                className="rounded-lg border border-neutral-300 px-3 py-1 disabled:opacity-60"
+                onClick={() => setOffset((prev) => prev + limit)}
+                disabled={offset + limit >= totalCount}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </section>
       </div>
 

@@ -37,15 +37,15 @@ export default function HomePage() {
               </Link>
               <Link
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-300 px-4 font-medium text-neutral-700"
-                href="/config"
-              >
-                Config
-              </Link>
-              <Link
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-300 px-4 font-medium text-neutral-700"
                 href="/bookshelf"
               >
                 Bookshelf
+              </Link>
+              <Link
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-300 px-4 font-medium text-neutral-700"
+                href="/config"
+              >
+                Config
               </Link>
               <button
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-neutral-300 px-4 font-medium text-neutral-700 sm:col-span-2"

@@ -125,7 +125,7 @@ export default function ConfigPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] px-4 pb-24 pt-6">
       <div className="mx-auto flex max-w-screen-md flex-col gap-4">
-        <header className="rounded-2xl border bg-white p-5 shadow-sm">
+        <header className="sticky top-4 z-20 rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold">Config</h1>
