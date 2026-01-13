@@ -111,6 +111,15 @@ export default function OcrPage() {
     };
   }, [locationQuery]);
 
+  const clearOcr = () => {
+    setOcrText("");
+    setOcrError(null);
+    setOcrProgress(0);
+    setCandidates([]);
+    setShowCandidates(false);
+    setHasDbCandidates(false);
+  };
+
   useEffect(() => {
     if (!showCameraModal || !ocrStream || !cameraModalRef.current) return;
     cameraModalRef.current.srcObject = ocrStream;
@@ -692,12 +701,6 @@ export default function OcrPage() {
                   >
                     Open camera
                   </button>
-                  <button
-                    className="rounded-lg border border-neutral-300 px-2 py-1"
-                    onClick={stopOcrCamera}
-                  >
-                    Stop camera
-                  </button>
                 </div>
               </>
             )}
@@ -719,6 +722,13 @@ export default function OcrPage() {
           />
 
           <div className="mt-3 flex justify-end gap-2">
+            <button
+              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs"
+              onClick={clearOcr}
+              disabled={ocrRunning}
+            >
+              Clear OCR
+            </button>
             <button
               className="rounded-lg border border-neutral-300 px-3 py-2 text-xs"
               onClick={searchCandidates}
