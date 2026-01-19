@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, tokenStore } from "@/lib/api";
@@ -618,11 +619,13 @@ export default function BookScanPage() {
                   >
                     <div className="flex gap-3">
                       {row.coverUrl ? (
-                        <img
+                        <Image
                           src={row.coverUrl}
                           alt={`${row.title ?? row.isbn} cover`}
                           className="h-16 w-12 rounded-lg object-cover"
-                          loading="lazy"
+                          width={48}
+                          height={64}
+                          unoptimized
                         />
                       ) : (
                         <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
@@ -882,11 +885,13 @@ export default function BookScanPage() {
                   >
                     <div className="flex gap-3">
                       {candidate.cover_url ? (
-                        <img
+                        <Image
                           src={candidate.cover_url}
                           alt={`${candidate.title} cover`}
                           className="h-16 w-12 rounded-lg object-cover"
-                          loading="lazy"
+                          width={48}
+                          height={64}
+                          unoptimized
                         />
                       ) : (
                         <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">

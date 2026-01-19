@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import HamburgerNav from "@/components/HamburgerNav";
@@ -423,11 +424,13 @@ export default function BookshelfPage() {
                   >
                     <div className="flex gap-3">
                       {item.cover_url ? (
-                        <img
+                        <Image
                           src={item.cover_url}
                           alt={`${item.title} cover`}
                           className="h-16 w-12 rounded-lg object-cover"
-                          loading="lazy"
+                          width={48}
+                          height={64}
+                          unoptimized
                         />
                       ) : (
                         <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
@@ -480,11 +483,13 @@ export default function BookshelfPage() {
             <div className="flex items-start justify-between">
               <div className="flex gap-3">
                 {selectedBook.cover_url ? (
-                  <img
+                  <Image
                     src={selectedBook.cover_url}
                     alt={`${selectedBook.title} cover`}
                     className="h-20 w-14 rounded-lg object-cover"
-                    loading="lazy"
+                    width={56}
+                    height={80}
+                    unoptimized
                   />
                 ) : (
                   <div className="flex h-20 w-14 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
