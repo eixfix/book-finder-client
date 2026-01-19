@@ -42,6 +42,7 @@ type BookResponse = {
     isbn: string;
     title: string;
     author: string;
+    cover_url?: string;
   };
 };
 
