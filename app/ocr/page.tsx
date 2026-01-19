@@ -196,7 +196,7 @@ export default function OcrPage() {
       let combined = "";
       for (let i = 0; i < passes.length; i += 1) {
         setOcrProgress(Math.round((i / passes.length) * 100));
-        await worker.setParameters({ tessedit_pageseg_mode: passes[i].psm });
+        await worker.setParameters({ tessedit_pageseg_mode: passes[i].psm as 6 });
         const prepared = await preprocessImage(preparedFile, {
           mode: passes[i].mode,
           threshold: passes[i].threshold,
