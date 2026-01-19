@@ -48,14 +48,17 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
           RELEASE_PATH_FILE: /tmp/book-finder-client-release.txt
         run: |
           set -e
           mkdir -p ~/.ssh
           ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
-          RELEASE_DIR=$(ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $RELEASE_PATH_FILE")
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          RELEASE_DIR=$(ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $RELEASE_PATH_FILE")
           rsync -az --delete \
-            -e "ssh -p $SSH_PORT" \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT" \
             --exclude ".git" \
             --exclude "node_modules" \
             ./ "$SSH_USER@$SSH_HOST:$RELEASE_DIR/"
