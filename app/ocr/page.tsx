@@ -60,6 +60,7 @@ export default function OcrPage() {
   const [showCandidates, setShowCandidates] = useState(false);
   const [hasDbCandidates, setHasDbCandidates] = useState(false);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
+  const [lastSearchQuery, setLastSearchQuery] = useState("");
 
   const [showAddBook, setShowAddBook] = useState(false);
   const [showHolding, setShowHolding] = useState(false);
@@ -408,6 +409,7 @@ export default function OcrPage() {
       setOcrError("No text extracted. Try again.");
       return;
     }
+    setLastSearchQuery(query);
     await fetchCandidates(query);
   };
 
@@ -419,6 +421,7 @@ export default function OcrPage() {
       );
       setCandidates(response.data);
       setHasDbCandidates(response.data.some((candidate) => candidate.source === "db"));
+      setLastSearchQuery(query);
       setShowCandidates(true);
     } catch {
       setOcrError("Search failed. Try again.");
@@ -428,17 +431,29 @@ export default function OcrPage() {
   };
 
   const searchOnline = async () => {
-    const query = ocrText.replace(/\s+/g, " ").trim();
+    const query = lastSearchQuery || ocrText.replace(/\s+/g, " ").trim();
     if (!query) {
       setOcrError("No text extracted. Try again.");
       return;
     }
     setIsSearchingCandidates(true);
     try {
-      const response = await apiFetch<{ data: Candidate[] }>(
-        `/api/books/search?q=${encodeURIComponent(query)}&force_external=true`
-      );
-      setCandidates(response.data);
+      const queries = buildSearchQueries(query);
+      const lookupQueries = queries.length > 0 ? queries : [query];
+      for (let i = 0; i < lookupQueries.length; i += 1) {
+        const response = await apiFetch<{ data: Candidate[] }>(
+          `/api/books/search?q=${encodeURIComponent(lookupQueries[i])}&force_external=true`
+        );
+        if (response.data.length > 0) {
+          setCandidates(response.data);
+          setHasDbCandidates(false);
+          setLastSearchQuery(lookupQueries[i]);
+          setShowCandidates(true);
+          return;
+        }
+      }
+      setCandidates([]);
+      setHasDbCandidates(false);
       setShowCandidates(true);
     } catch {
       setOcrError("Search failed. Try again.");
@@ -456,6 +471,7 @@ export default function OcrPage() {
         if (response.data.length > 0) {
           setCandidates(response.data);
           setHasDbCandidates(response.data.some((candidate) => candidate.source === "db"));
+          setLastSearchQuery(queries[i]);
           setShowCandidates(true);
           return;
         }
