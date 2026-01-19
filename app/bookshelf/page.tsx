@@ -50,6 +50,10 @@ type BookshelfResponse = {
   paging: { limit: number; offset: number; total: number };
 };
 
+type CoverLookupResponse = {
+  data: { cover_url?: string }[];
+};
+
 export default function BookshelfPage() {
   const router = useRouter();
   const [isAuthed, setIsAuthed] = useState(false);
@@ -80,6 +84,8 @@ export default function BookshelfPage() {
   const [bookTitle, setBookTitle] = useState("");
   const [bookAuthor, setBookAuthor] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isFetchingCover, setIsFetchingCover] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -169,6 +175,7 @@ export default function BookshelfPage() {
     setShowDetail(false);
     setSelectedBook(null);
     setSelectedHolding(null);
+    setCoverError(null);
   };
 
   const openEditBook = (book: BookshelfBook) => {
@@ -177,6 +184,7 @@ export default function BookshelfPage() {
     setBookTitle(book.title);
     setBookAuthor(book.author);
     setModalError(null);
+    setCoverError(null);
     setShowDetail(false);
     setShowEditBook(true);
   };
@@ -229,6 +237,46 @@ export default function BookshelfPage() {
     if (returnToDetail && selectedBook) {
       setShowDetail(true);
       setReturnToDetail(false);
+    }
+  };
+
+  const fetchCover = async () => {
+    if (!selectedBook) return;
+    setIsFetchingCover(true);
+    setCoverError(null);
+    try {
+      const query = selectedBook.isbn || `${selectedBook.title} ${selectedBook.author}`.trim();
+      const response = await apiFetch<CoverLookupResponse>(
+        `/api/books/search?q=${encodeURIComponent(query)}&force_external=true&limit=5`
+      );
+      const match = response.data.find((item) => item.cover_url) ?? null;
+      if (!match?.cover_url) {
+        setCoverError("No cover found from external sources.");
+        return;
+      }
+      const updated = await apiFetch<BookResponse>(`/api/books/${selectedBook.book_id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          isbn: selectedBook.isbn,
+          title: selectedBook.title,
+          author: selectedBook.author,
+          cover_url: match.cover_url
+        })
+      });
+      setItems((prev) =>
+        prev.map((item) =>
+          item.book_id === selectedBook.book_id
+            ? { ...item, cover_url: updated.book.cover_url ?? match.cover_url }
+            : item
+        )
+      );
+      setSelectedBook((prev) =>
+        prev ? { ...prev, cover_url: updated.book.cover_url ?? match.cover_url } : prev
+      );
+    } catch {
+      setCoverError("Cover lookup failed. Try again.");
+    } finally {
+      setIsFetchingCover(false);
     }
   };
 
@@ -506,6 +554,9 @@ export default function BookshelfPage() {
                 Close
               </button>
             </div>
+            {coverError ? (
+              <p className="mt-3 text-xs text-red-600">{coverError}</p>
+            ) : null}
             <div className="mt-4 space-y-2 text-xs">
               {selectedBook.holdings.map((holding) => (
                 <div
@@ -532,7 +583,16 @@ export default function BookshelfPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              {!selectedBook.cover_url ? (
+                <button
+                  className="rounded-lg border border-neutral-300 px-3 py-2 text-xs disabled:opacity-60"
+                  onClick={fetchCover}
+                  disabled={isFetchingCover}
+                >
+                  {isFetchingCover ? "Fetching cover..." : "Fetch cover"}
+                </button>
+              ) : null}
               <div className="flex gap-2">
                 <button
                   className="rounded-lg border border-neutral-300 px-3 py-2 text-xs"

@@ -94,6 +94,7 @@ export default function BookScanPage() {
   const [showCandidates, setShowCandidates] = useState(false);
   const [candidateRowId, setCandidateRowId] = useState<string | null>(null);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
+  const [candidateSearchStatus, setCandidateSearchStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tokenStore.getSession()) {
@@ -462,17 +463,27 @@ export default function BookScanPage() {
   };
 
   const fetchCandidates = async (query: string, rowId?: string) => {
+    setCandidateSearchStatus(`Searching "${query}"...`);
     setIsSearchingCandidates(true);
     try {
       const response = await apiFetch<{ data: Candidate[] }>(
         `/api/books/search?q=${encodeURIComponent(query)}`
       );
       setCandidates(response.data);
+      if (response.data.length > 0) {
+        const sources = Array.from(
+          new Set(response.data.map((item) => item.source.replace(/_/g, " ").toUpperCase()))
+        ).join(", ");
+        setCandidateSearchStatus(`Found ${response.data.length} from ${sources}.`);
+      } else {
+        setCandidateSearchStatus(`No results for "${query}".`);
+      }
       if (rowId) {
         setCandidateRowId(rowId);
       }
       setShowCandidates(true);
     } catch {
+      setCandidateSearchStatus("Search failed.");
       if (rowId) {
         setRows((prev) =>
           prev.map((row) => (row.id === rowId ? { ...row, status: "needs_manual" } : row))
@@ -481,6 +492,11 @@ export default function BookScanPage() {
     } finally {
       setIsSearchingCandidates(false);
     }
+  };
+
+  const closeCandidates = () => {
+    setShowCandidates(false);
+    setCandidateSearchStatus(null);
   };
 
   const selectCandidate = (candidate?: Candidate) => {
@@ -868,11 +884,14 @@ export default function BookScanPage() {
               <h3 className="text-base font-semibold">Pick a Candidate</h3>
               <button
                 className="text-xs text-neutral-500"
-                onClick={() => setShowCandidates(false)}
+                onClick={closeCandidates}
               >
                 Close
               </button>
             </div>
+            {candidateSearchStatus ? (
+              <p className="mt-2 text-[11px] text-neutral-500">{candidateSearchStatus}</p>
+            ) : null}
             <div className="mt-4 space-y-2 text-sm">
               {candidates.length === 0 ? (
                 <p className="text-xs text-neutral-600">No candidates found.</p>

@@ -61,6 +61,7 @@ export default function OcrPage() {
   const [hasDbCandidates, setHasDbCandidates] = useState(false);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
   const [lastSearchQuery, setLastSearchQuery] = useState("");
+  const [externalSearchStatus, setExternalSearchStatus] = useState<string | null>(null);
 
   const [showAddBook, setShowAddBook] = useState(false);
   const [showHolding, setShowHolding] = useState(false);
@@ -422,6 +423,7 @@ export default function OcrPage() {
       setCandidates(response.data);
       setHasDbCandidates(response.data.some((candidate) => candidate.source === "db"));
       setLastSearchQuery(query);
+      setExternalSearchStatus(null);
       setShowCandidates(true);
     } catch {
       setOcrError("Search failed. Try again.");
@@ -437,26 +439,36 @@ export default function OcrPage() {
       return;
     }
     setIsSearchingCandidates(true);
+    setExternalSearchStatus(null);
     try {
       const queries = buildSearchQueries(query);
       const lookupQueries = queries.length > 0 ? queries : [query];
       for (let i = 0; i < lookupQueries.length; i += 1) {
+        setExternalSearchStatus(`Searching "${lookupQueries[i]}"...`);
         const response = await apiFetch<{ data: Candidate[] }>(
           `/api/books/search?q=${encodeURIComponent(lookupQueries[i])}&force_external=true`
         );
         if (response.data.length > 0) {
+          const sources = Array.from(
+            new Set(
+              response.data.map((item) => item.source.replace(/_/g, " ").toUpperCase())
+            )
+          ).join(", ");
           setCandidates(response.data);
           setHasDbCandidates(false);
           setLastSearchQuery(lookupQueries[i]);
+          setExternalSearchStatus(`Found ${response.data.length} from ${sources}.`);
           setShowCandidates(true);
           return;
         }
       }
       setCandidates([]);
       setHasDbCandidates(false);
+      setExternalSearchStatus(`No external results for "${query}".`);
       setShowCandidates(true);
     } catch {
       setOcrError("Search failed. Try again.");
+      setExternalSearchStatus("Search failed.");
     } finally {
       setIsSearchingCandidates(false);
     }
@@ -770,6 +782,9 @@ export default function OcrPage() {
                 Close
               </button>
             </div>
+              {externalSearchStatus ? (
+                <p className="mt-2 text-[11px] text-neutral-500">{externalSearchStatus}</p>
+              ) : null}
               <div className="mt-3 space-y-2 text-sm">
                 {candidates.length === 0 ? (
                   <p className="text-xs text-neutral-600">No candidates found.</p>
@@ -800,6 +815,9 @@ export default function OcrPage() {
                           <div className="text-xs text-neutral-500">{candidate.author}</div>
                           <div className="text-[11px] text-neutral-400">
                             {candidate.isbn ? `ISBN ${candidate.isbn}` : "No ISBN"}
+                          </div>
+                          <div className="text-[11px] text-neutral-400">
+                            {candidate.source.replace(/_/g, " ").toUpperCase()}
                           </div>
                           {candidate.holdings && candidate.holdings.length > 0 ? (
                             <div className="mt-1 text-[11px] text-neutral-400">
