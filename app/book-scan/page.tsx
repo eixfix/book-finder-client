@@ -95,6 +95,7 @@ export default function BookScanPage() {
   const [candidateRowId, setCandidateRowId] = useState<string | null>(null);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
   const [candidateSearchStatus, setCandidateSearchStatus] = useState<string | null>(null);
+  const [searchingRowId, setSearchingRowId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tokenStore.getSession()) {
@@ -465,6 +466,7 @@ export default function BookScanPage() {
   const fetchCandidates = async (query: string, rowId?: string) => {
     setCandidateSearchStatus(`Searching "${query}"...`);
     setIsSearchingCandidates(true);
+    setSearchingRowId(rowId ?? null);
     try {
       const response = await apiFetch<{ data: Candidate[] }>(
         `/api/books/search?q=${encodeURIComponent(query)}`
@@ -491,12 +493,22 @@ export default function BookScanPage() {
       }
     } finally {
       setIsSearchingCandidates(false);
+      setSearchingRowId(null);
     }
   };
 
   const closeCandidates = () => {
     setShowCandidates(false);
     setCandidateSearchStatus(null);
+  };
+
+  const rerunCandidateSearch = async (row: ScanRow) => {
+    const query = row.isbn || `${row.title ?? ""} ${row.author ?? ""}`.trim();
+    if (!query) {
+      setError("ISBN is required to search.");
+      return;
+    }
+    await fetchCandidates(query, row.id);
   };
 
   const selectCandidate = (candidate?: Candidate) => {
@@ -663,7 +675,9 @@ export default function BookScanPage() {
                         {row.message ? (
                           <div className="mt-1 text-xs text-neutral-500">{row.message}</div>
                         ) : null}
-                        {isSearchingCandidates && row.status === "not_in_db" ? (
+                        {isSearchingCandidates &&
+                        row.status === "not_in_db" &&
+                        row.id === searchingRowId ? (
                           <div className="mt-1 text-xs text-neutral-500">
                             Searching suggestions...
                           </div>
@@ -688,6 +702,14 @@ export default function BookScanPage() {
                               onClick={() => openAddBook(row, row.status === "needs_manual")}
                             >
                               Add Book
+                            </button>
+                          ) : null}
+                          {row.status === "not_in_db" ? (
+                            <button
+                              className="rounded-lg border border-neutral-300 px-2 py-1"
+                              onClick={() => rerunCandidateSearch(row)}
+                            >
+                              Find candidates
                             </button>
                           ) : null}
                         </div>
