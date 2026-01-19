@@ -1,0 +1,71 @@
+name: Deploy Client
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_API_TOKEN: ${{ secrets.NEXT_PUBLIC_API_TOKEN }}
+          API_PROXY_TARGET: ${{ secrets.API_PROXY_TARGET }}
+        run: npm run build
+
+      - name: Prepare release on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            RELEASES_DIR=/opt/book-finder-client/releases
+            TS=$(date +%Y%m%d%H%M%S)
+            RELEASE_DIR=$RELEASES_DIR/$TS
+            mkdir -p "$RELEASE_DIR"
+            echo "$RELEASE_DIR" > /tmp/book-finder-client-release.txt
+
+      - name: Upload release via rsync
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+          RELEASE_PATH_FILE: /tmp/book-finder-client-release.txt
+        run: |
+          set -e
+          RELEASE_DIR=$(ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $RELEASE_PATH_FILE")
+          rsync -az --delete \
+            -e "ssh -p $SSH_PORT" \
+            --exclude ".git" \
+            --exclude "node_modules" \
+            ./ "$SSH_USER@$SSH_HOST:$RELEASE_DIR/"
+
+      - name: Deploy release on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            RELEASE_DIR=$(cat /tmp/book-finder-client-release.txt)
+            bash "$RELEASE_DIR/scripts/deploy-client.sh" "$RELEASE_DIR"

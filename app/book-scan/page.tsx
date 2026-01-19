@@ -13,6 +13,7 @@ type ScanRow = {
   status: ScanStatus;
   title?: string;
   author?: string;
+  coverUrl?: string;
   message?: string;
   bookId?: number;
   locationName?: string;
@@ -24,7 +25,7 @@ type LookupResponse = {
   found: boolean;
   source: "db" | "none";
   normalized_isbn: string;
-  book?: { id: number; isbn: string; title: string; author: string };
+  book?: { id: number; isbn: string; title: string; author: string; cover_url?: string };
   holdings?: {
     id: number;
     location_id: number;
@@ -41,6 +42,7 @@ type Candidate = {
   author: string;
   isbn?: string;
   source: "db" | "external";
+  cover_url?: string;
   book_id?: number;
 };
 
@@ -55,7 +57,7 @@ type HoldingResponse = {
 };
 
 type BookResponse = {
-  book: { id: number; isbn: string; title: string; author: string };
+  book: { id: number; isbn: string; title: string; author: string; cover_url?: string };
 };
 
 export default function BookScanPage() {
@@ -315,6 +317,7 @@ export default function BookScanPage() {
               status: "found_db",
               title: response.book.title,
               author: response.book.author,
+              coverUrl: response.book.cover_url,
               bookId: response.book.id,
               message: holdingSummary
             };
@@ -429,7 +432,8 @@ export default function BookScanPage() {
         body: JSON.stringify({
           isbn: bookIsbn,
           title: bookTitle,
-          author: bookAuthor
+          author: bookAuthor,
+          cover_url: activeRow.coverUrl
         })
       });
       await apiFetch<HoldingResponse>(`/api/books/${response.book.id}/holdings`, {
@@ -450,6 +454,7 @@ export default function BookScanPage() {
                 isbn: bookIsbn,
                 title: bookTitle,
                 author: bookAuthor,
+                coverUrl: activeRow.coverUrl,
                 locationName: selectedLocation.name,
                 shelfNumber,
                 qty
@@ -803,7 +808,8 @@ export default function BookScanPage() {
       status: "needs_manual",
       title: candidate?.title ?? existingRow?.title,
       author: candidate?.author ?? existingRow?.author,
-      bookId: candidate?.book_id ?? existingRow?.bookId
+      bookId: candidate?.book_id ?? existingRow?.bookId,
+      coverUrl: candidate?.cover_url ?? existingRow?.coverUrl
     };
 
     if (candidateRowId) {
@@ -927,47 +933,63 @@ export default function BookScanPage() {
                     key={row.id}
                     className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{row.isbn || "Manual entry"}</span>
-                      {row.status !== "found_db" ? (
-                        <span className="text-xs text-neutral-500">{row.status}</span>
-                      ) : null}
-                    </div>
-                    {row.title ? (
-                      <div className="mt-1 text-xs text-neutral-600">
-                        {row.title} — {row.author}
+                    <div className="flex gap-3">
+                      {row.coverUrl ? (
+                        <img
+                          src={row.coverUrl}
+                          alt={`${row.title ?? row.isbn} cover`}
+                          className="h-16 w-12 rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
+                          No cover
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{row.isbn || "Manual entry"}</span>
+                          {row.status !== "found_db" ? (
+                            <span className="text-xs text-neutral-500">{row.status}</span>
+                          ) : null}
+                        </div>
+                        {row.title ? (
+                          <div className="mt-1 text-xs text-neutral-600">
+                            {row.title} — {row.author}
+                          </div>
+                        ) : null}
+                        {row.message ? (
+                          <div className="mt-1 text-xs text-neutral-500">{row.message}</div>
+                        ) : null}
+                        {isSearchingCandidates && row.status === "not_in_db" ? (
+                          <div className="mt-1 text-xs text-neutral-500">
+                            Searching suggestions...
+                          </div>
+                        ) : null}
+                        {row.locationName ? (
+                          <div className="mt-1 text-xs text-neutral-500">
+                            {row.locationName} · {row.shelfNumber} · qty {row.qty}
+                          </div>
+                        ) : null}
+                        <div className="mt-2 flex gap-2 text-xs">
+                          {row.status === "found_db" ? (
+                            <button
+                              className="rounded-lg border border-neutral-300 px-2 py-1"
+                              onClick={() => openAddHolding(row)}
+                            >
+                              Add Bookshelf
+                            </button>
+                          ) : null}
+                          {row.status === "not_in_db" || row.status === "needs_manual" ? (
+                            <button
+                              className="rounded-lg border border-neutral-300 px-2 py-1"
+                              onClick={() => openAddBook(row, row.status === "needs_manual")}
+                            >
+                              Add Book
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    ) : null}
-                    {row.message ? (
-                      <div className="mt-1 text-xs text-neutral-500">{row.message}</div>
-                    ) : null}
-                    {isSearchingCandidates && row.status === "not_in_db" ? (
-                      <div className="mt-1 text-xs text-neutral-500">
-                        Searching suggestions...
-                      </div>
-                    ) : null}
-                    {row.locationName ? (
-                      <div className="mt-1 text-xs text-neutral-500">
-                        {row.locationName} · {row.shelfNumber} · qty {row.qty}
-                      </div>
-                    ) : null}
-                    <div className="mt-2 flex gap-2 text-xs">
-                      {row.status === "found_db" ? (
-                        <button
-                          className="rounded-lg border border-neutral-300 px-2 py-1"
-                          onClick={() => openAddHolding(row)}
-                        >
-                          Add Bookshelf
-                        </button>
-                      ) : null}
-                      {row.status === "not_in_db" || row.status === "needs_manual" ? (
-                        <button
-                          className="rounded-lg border border-neutral-300 px-2 py-1"
-                          onClick={() => openAddBook(row, row.status === "needs_manual")}
-                        >
-                          Add Book
-                        </button>
-                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -1175,10 +1197,27 @@ export default function BookScanPage() {
                     className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-left"
                     onClick={() => selectCandidate(candidate)}
                   >
-                    <div className="text-xs font-semibold">{candidate.title}</div>
-                    <div className="text-xs text-neutral-500">{candidate.author}</div>
-                    <div className="text-[11px] text-neutral-400">
-                      {candidate.isbn ? `ISBN ${candidate.isbn}` : "No ISBN"} · {candidate.source}
+                    <div className="flex gap-3">
+                      {candidate.cover_url ? (
+                        <img
+                          src={candidate.cover_url}
+                          alt={`${candidate.title} cover`}
+                          className="h-16 w-12 rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
+                          No cover
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold">{candidate.title}</div>
+                        <div className="text-xs text-neutral-500">{candidate.author}</div>
+                        <div className="text-[11px] text-neutral-400">
+                          {candidate.isbn ? `ISBN ${candidate.isbn}` : "No ISBN"} ·{" "}
+                          {candidate.source}
+                        </div>
+                      </div>
                     </div>
                   </button>
                 ))

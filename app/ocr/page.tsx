@@ -12,6 +12,7 @@ type Candidate = {
   author: string;
   isbn?: string;
   source: "db" | "external";
+  cover_url?: string;
   book_id?: number;
   holdings?: {
     id: number;
@@ -74,6 +75,7 @@ export default function OcrPage() {
   const [bookTitle, setBookTitle] = useState("");
   const [bookAuthor, setBookAuthor] = useState("");
   const [bookIsbn, setBookIsbn] = useState("");
+  const [bookCoverUrl, setBookCoverUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
@@ -477,6 +479,7 @@ export default function OcrPage() {
     setBookTitle(candidate?.title ?? "");
     setBookAuthor(candidate?.author ?? "");
     setBookIsbn(candidate?.isbn ?? "");
+    setBookCoverUrl(candidate?.cover_url ?? "");
     setShelfNumber("");
     setQty(1);
     setSelectedLocation(null);
@@ -545,7 +548,8 @@ export default function OcrPage() {
         body: JSON.stringify({
           isbn: bookIsbn,
           title: bookTitle,
-          author: bookAuthor
+          author: bookAuthor,
+          cover_url: bookCoverUrl
         })
       });
       await apiFetch<HoldingResponse>(`/api/books/${response.book.id}/holdings`, {
@@ -761,21 +765,37 @@ export default function OcrPage() {
                       className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-left"
                       onClick={() => openAddBook(candidate)}
                     >
-                      <div className="text-xs font-semibold">{candidate.title}</div>
-                      <div className="text-xs text-neutral-500">{candidate.author}</div>
-                    <div className="text-[11px] text-neutral-400">
-                      {candidate.isbn ? `ISBN ${candidate.isbn}` : "No ISBN"}
-                    </div>
-                      {candidate.holdings && candidate.holdings.length > 0 ? (
-                        <div className="mt-1 text-[11px] text-neutral-400">
-                          {candidate.holdings
-                            .map(
-                              (holding) =>
-                                `${holding.location_name} · ${holding.shelf_number} · qty ${holding.qty}`
-                            )
-                            .join(", ")}
+                      <div className="flex gap-3">
+                        {candidate.cover_url ? (
+                          <img
+                            src={candidate.cover_url}
+                            alt={`${candidate.title} cover`}
+                            className="h-16 w-12 rounded-lg object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
+                            No cover
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold">{candidate.title}</div>
+                          <div className="text-xs text-neutral-500">{candidate.author}</div>
+                          <div className="text-[11px] text-neutral-400">
+                            {candidate.isbn ? `ISBN ${candidate.isbn}` : "No ISBN"}
+                          </div>
+                          {candidate.holdings && candidate.holdings.length > 0 ? (
+                            <div className="mt-1 text-[11px] text-neutral-400">
+                              {candidate.holdings
+                                .map(
+                                  (holding) =>
+                                    `${holding.location_name} · ${holding.shelf_number} · qty ${holding.qty}`
+                                )
+                                .join(", ")}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
+                      </div>
                     </button>
                   ))
                 )}

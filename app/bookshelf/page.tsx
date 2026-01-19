@@ -20,6 +20,7 @@ type BookshelfBook = {
   isbn: string;
   title: string;
   author: string;
+  cover_url?: string;
   total_qty: number;
   holdings: BookshelfHolding[];
 };
@@ -420,11 +421,27 @@ export default function BookshelfPage() {
                     className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-left"
                     onClick={() => openDetail(item)}
                   >
-                    <div className="text-sm font-semibold">{item.title}</div>
-                    <div className="text-xs text-neutral-600">{item.author}</div>
-                    <div className="mt-1 text-xs text-neutral-500">ISBN {item.isbn}</div>
-                    <div className="mt-2 text-xs text-neutral-600">
-                      {item.holdings.length} shelves · qty {item.total_qty}
+                    <div className="flex gap-3">
+                      {item.cover_url ? (
+                        <img
+                          src={item.cover_url}
+                          alt={`${item.title} cover`}
+                          className="h-16 w-12 rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-12 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
+                          No cover
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="text-xs text-neutral-600">{item.author}</div>
+                        <div className="mt-1 text-xs text-neutral-500">ISBN {item.isbn}</div>
+                        <div className="mt-2 text-xs text-neutral-600">
+                          {item.holdings.length} shelves · qty {item.total_qty}
+                        </div>
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -461,15 +478,29 @@ export default function BookshelfPage() {
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg">
             <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-base font-semibold">{selectedBook.title}</h3>
-                <p className="text-xs text-neutral-500">{selectedBook.author}</p>
+              <div className="flex gap-3">
+                {selectedBook.cover_url ? (
+                  <img
+                    src={selectedBook.cover_url}
+                    alt={`${selectedBook.title} cover`}
+                    className="h-20 w-14 rounded-lg object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-20 w-14 items-center justify-center rounded-lg bg-neutral-100 text-[10px] text-neutral-500">
+                    No cover
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-base font-semibold">{selectedBook.title}</h3>
+                  <p className="text-xs text-neutral-500">{selectedBook.author}</p>
+                  <div className="mt-1 text-xs text-neutral-500">ISBN {selectedBook.isbn}</div>
+                </div>
               </div>
               <button className="text-xs text-neutral-500" onClick={closeDetail}>
                 Close
               </button>
             </div>
-            <div className="mt-2 text-xs text-neutral-500">ISBN {selectedBook.isbn}</div>
             <div className="mt-4 space-y-2 text-xs">
               {selectedBook.holdings.map((holding) => (
                 <div
