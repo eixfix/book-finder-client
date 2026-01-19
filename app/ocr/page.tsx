@@ -314,9 +314,9 @@ export default function OcrPage() {
     const width = Math.round(img.width * scale);
     const height = Math.round(img.height * scale);
     const canvas = document.createElement("canvas");
-    let cropX = ocrCropCenter ? Math.round(width * 0.05) : 0;
+    const cropX = ocrCropCenter ? Math.round(width * 0.05) : 0;
     let cropY = ocrCropCenter ? Math.round(height * 0.1) : 0;
-    let cropW = ocrCropCenter ? Math.round(width * 0.9) : width;
+    const cropW = ocrCropCenter ? Math.round(width * 0.9) : width;
     let cropH = ocrCropCenter ? Math.round(height * 0.7) : height;
     if (options.mode === "title") {
       cropY = Math.round(height * 0.05);

@@ -89,23 +89,10 @@ export default function BookScanPage() {
   const [isbnLocked, setIsbnLocked] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
-
-  const [showOcr, setShowOcr] = useState(false);
-  const [ocrText, setOcrText] = useState("");
-  const [ocrProgress, setOcrProgress] = useState(0);
-  const [ocrRunning, setOcrRunning] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
-  const [ocrLang] = useState("eng");
-  const [ocrCropCenter, setOcrCropCenter] = useState(false);
-  const [ocrFocusMode, setOcrFocusMode] = useState<"full" | "title" | "author">("full");
-  const [ocrEngine, setOcrEngine] = useState<"local" | "vision" | "ocrspace">("local");
-  const [autoSearchOcr, setAutoSearchOcr] = useState(true);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [showCandidates, setShowCandidates] = useState(false);
   const [candidateRowId, setCandidateRowId] = useState<string | null>(null);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
-  const [ocrStream, setOcrStream] = useState<MediaStream | null>(null);
-  const ocrVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!tokenStore.getSession()) {
@@ -214,7 +201,7 @@ export default function BookScanPage() {
       } else {
         await startZXing();
       }
-    } catch (err) {
+    } catch {
       setError("Camera access failed.");
       setIsScanning(false);
     }
@@ -328,7 +315,7 @@ export default function BookScanPage() {
       if (!response.found) {
         await fetchCandidates(isbn, rowId);
       }
-    } catch (err) {
+    } catch {
       setRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, status: "error" } : row)));
     }
   };
@@ -473,307 +460,6 @@ export default function BookScanPage() {
     }
   };
 
-  const openOcr = () => {
-    if (isScanning) {
-      stopScan();
-    }
-    setShowOcr(true);
-    setOcrText("");
-    setOcrProgress(0);
-    setOcrError(null);
-    setCandidates([]);
-    setShowCandidates(false);
-  };
-
-  const closeOcr = () => {
-    stopOcrCamera();
-    setShowOcr(false);
-  };
-
-  const startOcrCamera = async () => {
-    setOcrError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false
-      });
-      setOcrStream(stream);
-      if (ocrVideoRef.current) {
-        ocrVideoRef.current.srcObject = stream;
-        await ocrVideoRef.current.play();
-      }
-    } catch {
-      setOcrError("Camera access failed.");
-    }
-  };
-
-  const stopOcrCamera = () => {
-    if (ocrVideoRef.current) {
-      ocrVideoRef.current.pause();
-      ocrVideoRef.current.srcObject = null;
-    }
-    if (ocrStream) {
-      ocrStream.getTracks().forEach((track) => track.stop());
-      setOcrStream(null);
-    }
-  };
-
-  const captureOcrFrame = async () => {
-    if (!ocrVideoRef.current) return;
-    const video = ocrVideoRef.current;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.9)
-    );
-    if (!blob) return;
-    const file = new File([blob], "ocr-capture.jpg", { type: "image/jpeg" });
-    await runOcrMultiPass(file);
-  };
-
-  const runOcr = async (file: File) => {
-    setOcrRunning(true);
-    setOcrProgress(0);
-    setOcrError(null);
-    setOcrText("");
-    try {
-      const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker();
-      await worker.loadLanguage(ocrLang);
-      await worker.initialize(ocrLang);
-      const prepared = await preprocessImage(file, {
-        mode: ocrFocusMode,
-        threshold: true,
-        contrast: 150
-      });
-      const { data } = await worker.recognize(prepared);
-      await worker.terminate();
-      setOcrProgress(100);
-      await applyOcrResult(data.text.trim());
-    } catch (err) {
-      setOcrError("OCR failed. Try again.");
-    } finally {
-      setOcrRunning(false);
-    }
-  };
-
-  const preprocessImage = async (
-    file: File,
-    options: { mode: "full" | "title" | "author"; threshold: boolean; contrast: number }
-  ) => {
-    const img = await createImageBitmap(file);
-    const maxWidth = 1600;
-    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-    const width = Math.round(img.width * scale);
-    const height = Math.round(img.height * scale);
-    const canvas = document.createElement("canvas");
-    let cropX = ocrCropCenter ? Math.round(width * 0.05) : 0;
-    let cropY = ocrCropCenter ? Math.round(height * 0.1) : 0;
-    let cropW = ocrCropCenter ? Math.round(width * 0.9) : width;
-    let cropH = ocrCropCenter ? Math.round(height * 0.7) : height;
-    if (options.mode === "title") {
-      cropY = Math.round(height * 0.05);
-      cropH = Math.round(height * 0.45);
-    }
-    if (options.mode === "author") {
-      cropY = Math.round(height * 0.45);
-      cropH = Math.round(height * 0.35);
-    }
-    canvas.width = cropW;
-    canvas.height = cropH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.filter = `grayscale(100%) contrast(${options.contrast}%)`;
-    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-    if (options.threshold) {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        const value = data[i];
-        const threshold = value > 160 ? 255 : 0;
-        data[i] = threshold;
-        data[i + 1] = threshold;
-        data[i + 2] = threshold;
-      }
-      ctx.putImageData(imageData, 0, 0);
-    }
-    return canvas;
-  };
-
-  const runOcrMultiPass = async (file: File) => {
-    if (ocrEngine === "vision") {
-      await runVisionOcr(file);
-      return;
-    }
-    if (ocrEngine === "ocrspace") {
-      await runOCRSpace(file);
-      return;
-    }
-    setOcrRunning(true);
-    setOcrProgress(0);
-    setOcrError(null);
-    setOcrText("");
-    try {
-      const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker();
-      await worker.loadLanguage(ocrLang);
-      await worker.initialize(ocrLang);
-      const passes = [{ mode: "full" as const, psm: 6, threshold: false, contrast: 150 }];
-      let combined = "";
-      for (let i = 0; i < passes.length; i += 1) {
-        setOcrProgress(Math.round((i / passes.length) * 100));
-        await worker.setParameters({ tessedit_pageseg_mode: passes[i].psm });
-        const prepared = await preprocessImage(file, {
-          mode: passes[i].mode,
-          threshold: passes[i].threshold,
-          contrast: passes[i].contrast
-        });
-        const { data } = await worker.recognize(prepared);
-        combined += `\\n${data.text.trim()}`;
-      }
-      await worker.terminate();
-      setOcrProgress(100);
-      await applyOcrResult(combined.trim());
-    } catch (err) {
-      setOcrError("OCR failed. Try again.");
-    } finally {
-      setOcrRunning(false);
-    }
-  };
-
-  const runVisionOcr = async (file: File) => {
-    setOcrRunning(true);
-    setOcrProgress(0);
-    setOcrError(null);
-    setOcrText("");
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const response = await apiFetch<{ text: string }>("/api/ocr/vision", {
-        method: "POST",
-        body: formData,
-        headers: {}
-      });
-      setOcrProgress(100);
-      await applyOcrResult(response.text.trim());
-    } catch {
-      setOcrError("Vision OCR failed. Check API key.");
-    } finally {
-      setOcrRunning(false);
-    }
-  };
-
-  const runOCRSpace = async (file: File) => {
-    setOcrRunning(true);
-    setOcrProgress(0);
-    setOcrError(null);
-    setOcrText("");
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const response = await apiFetch<{ text: string }>("/api/ocr/space", {
-        method: "POST",
-        body: formData,
-        headers: {}
-      });
-      setOcrProgress(100);
-      await applyOcrResult(response.text.trim());
-    } catch {
-      setOcrError("OCR.space failed. Check API key.");
-    } finally {
-      setOcrRunning(false);
-    }
-  };
-
-  const applyOcrResult = async (text: string) => {
-    setOcrText(text);
-    if (!autoSearchOcr) return;
-    const queries = buildSearchQueries(text);
-    if (queries.length > 0) {
-      await searchWithFallback(queries);
-    }
-  };
-
-  const buildSearchQueries = (text: string) => {
-    if (!text.trim()) return [];
-    const normalized = text
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .replace(/[^a-zA-Z0-9\s]/g, " ")
-      .replace(/\b(sebuah|novel|komedi|oleh)\b/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const lines = normalized
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const title = lines[0] ?? normalized;
-    const authorLine = lines.find((line) => /raditya dika/i.test(line));
-    const upperLines = lines.filter((line) => /^[A-Z0-9\s]+$/.test(line));
-    const combinedTitle =
-      upperLines.length >= 2 ? `${upperLines[0]} ${upperLines[1]}`.trim() : "";
-    const queries = [];
-    if (authorLine) {
-      queries.push(`${title} ${authorLine}`.trim());
-      queries.push(authorLine);
-    }
-    if (combinedTitle) {
-      queries.push(combinedTitle);
-      if (authorLine) {
-        queries.push(`${combinedTitle} ${authorLine}`.trim());
-      }
-    }
-    queries.push(title);
-    const titleTokens = title.split(" ").filter(Boolean);
-    if (titleTokens.length > 1) {
-      queries.push(`${titleTokens[0]} ${titleTokens[1]}`);
-    }
-    if (titleTokens.length > 0) {
-      queries.push(titleTokens[0]);
-    }
-    queries.push(normalized);
-    return Array.from(new Set(queries)).filter(Boolean);
-  };
-
-  const searchWithFallback = async (queries: string[]) => {
-    for (let i = 0; i < queries.length; i += 1) {
-      try {
-        const response = await apiFetch<{ data: Candidate[] }>(
-          `/api/books/search?q=${encodeURIComponent(queries[i])}`
-        );
-        if (response.data.length > 0) {
-          setCandidates(response.data);
-          setShowCandidates(true);
-          return;
-        }
-      } catch {
-        // ignore and continue fallback
-      }
-    }
-    setCandidates([]);
-    setShowCandidates(true);
-  };
-
-  const handleOcrFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    await runOcrMultiPass(file);
-  };
-
-  const searchCandidates = async () => {
-    const query = ocrText.replace(/\s+/g, " ").trim();
-    if (!query) {
-      setOcrError("No text extracted. Try again.");
-      return;
-    }
-    await fetchCandidates(query);
-  };
-
   const fetchCandidates = async (query: string, rowId?: string) => {
     setIsSearchingCandidates(true);
     try {
@@ -790,8 +476,6 @@ export default function BookScanPage() {
         setRows((prev) =>
           prev.map((row) => (row.id === rowId ? { ...row, status: "needs_manual" } : row))
         );
-      } else {
-        setOcrError("Search failed. Try again.");
       }
     } finally {
       setIsSearchingCandidates(false);
@@ -820,7 +504,6 @@ export default function BookScanPage() {
       setRows((prev) => [rowToEdit, ...prev]);
     }
     setShowCandidates(false);
-    setShowOcr(false);
     setCandidateRowId(null);
     openAddBook(rowToEdit, true);
   };

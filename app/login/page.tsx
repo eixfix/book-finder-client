@@ -27,7 +27,7 @@ export default function LoginPage() {
       });
       tokenStore.set(response.token);
       router.push("/book-scan");
-    } catch (err) {
+    } catch {
       setError("Login failed. Check your credentials.");
     } finally {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import HamburgerNav from "@/components/HamburgerNav";
 import { apiFetch, tokenStore } from "@/lib/api";
@@ -102,7 +102,7 @@ export default function BookshelfPage() {
     loadLocations();
   }, [isAuthed]);
 
-  const loadBookshelf = async (active: { value: boolean }) => {
+  const loadBookshelf = useCallback(async (active: { value: boolean }) => {
     setIsLoading(true);
     setError(null);
     const params = new URLSearchParams();
@@ -131,11 +131,11 @@ export default function BookshelfPage() {
         setIsLoading(false);
       }
     }
-  };
+  }, [authorQuery, isbnQuery, limit, locationQuery, offset, shelfQuery, titleQuery]);
 
   useEffect(() => {
     if (!isAuthed) return;
-    let isActive = { value: true };
+    const isActive = { value: true };
     const timeout = setTimeout(() => {
       loadBookshelf(isActive);
     }, 250);
@@ -143,7 +143,7 @@ export default function BookshelfPage() {
       isActive.value = false;
       clearTimeout(timeout);
     };
-  }, [titleQuery, authorQuery, isbnQuery, locationQuery, shelfQuery, offset, isAuthed]);
+  }, [titleQuery, authorQuery, isbnQuery, locationQuery, shelfQuery, offset, isAuthed, loadBookshelf]);
 
   useEffect(() => {
     setOffset(0);
