@@ -51,6 +51,8 @@ jobs:
           RELEASE_PATH_FILE: /tmp/book-finder-client-release.txt
         run: |
           set -e
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
           RELEASE_DIR=$(ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cat $RELEASE_PATH_FILE")
           rsync -az --delete \
             -e "ssh -p $SSH_PORT" \
