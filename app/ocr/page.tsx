@@ -191,9 +191,7 @@ export default function OcrPage() {
     setOcrText("");
     try {
       const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker();
-      await worker.loadLanguage("eng");
-      await worker.initialize("eng");
+      const worker = await createWorker("eng");
       const passes = [{ mode: "full" as const, psm: 6, threshold: false, contrast: 150 }];
       let combined = "";
       for (let i = 0; i < passes.length; i += 1) {
