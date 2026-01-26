@@ -12,7 +12,7 @@ type Candidate = {
   title: string;
   author: string;
   isbn?: string;
-  source: "db" | "external";
+  source: "db" | "external" | "google_books" | "open_library";
   cover_url?: string;
   book_id?: number;
   holdings?: {
