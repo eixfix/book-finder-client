@@ -233,6 +233,21 @@ export default function ConfigPage() {
             </div>
           </div>
         </section>
+
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-neutral-700">User Management</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Create new users for accessing the scanner.
+          </p>
+          <div className="mt-4">
+            <button
+              className="rounded-xl border border-neutral-300 px-4 py-2 text-xs text-neutral-700"
+              onClick={() => router.push("/config/users")}
+            >
+              Add user
+            </button>
+          </div>
+        </section>
       </div>
     </main>
   );

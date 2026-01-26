@@ -55,13 +55,20 @@ export default function OcrPage() {
   const [autoSearchOcr, setAutoSearchOcr] = useState(true);
   const [ocrStream, setOcrStream] = useState<MediaStream | null>(null);
   const [showCameraModal, setShowCameraModal] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [googleCandidates, setGoogleCandidates] = useState<Candidate[]>([]);
+  const [openLibraryCandidates, setOpenLibraryCandidates] = useState<Candidate[]>([]);
   const [showCandidates, setShowCandidates] = useState(false);
   const [hasDbCandidates, setHasDbCandidates] = useState(false);
   const [isSearchingCandidates, setIsSearchingCandidates] = useState(false);
   const [lastSearchQuery, setLastSearchQuery] = useState("");
   const [externalSearchStatus, setExternalSearchStatus] = useState<string | null>(null);
+  const [googleSearchStatus, setGoogleSearchStatus] = useState<string | null>(null);
+  const [openLibrarySearchStatus, setOpenLibrarySearchStatus] = useState<string | null>(null);
+  const [externalTabMode, setExternalTabMode] = useState(false);
+  const [externalTab, setExternalTab] = useState<"google_books" | "open_library">("google_books");
 
   const [showAddBook, setShowAddBook] = useState(false);
   const [showHolding, setShowHolding] = useState(false);
@@ -120,9 +127,17 @@ export default function OcrPage() {
     setOcrText("");
     setOcrError(null);
     setOcrProgress(0);
+    setSelectedFileName("");
     setCandidates([]);
+    setGoogleCandidates([]);
+    setOpenLibraryCandidates([]);
     setShowCandidates(false);
     setHasDbCandidates(false);
+    setExternalTabMode(false);
+    setExternalTab("google_books");
+    setExternalSearchStatus(null);
+    setGoogleSearchStatus(null);
+    setOpenLibrarySearchStatus(null);
   };
 
   useEffect(() => {
@@ -401,7 +416,68 @@ export default function OcrPage() {
   const handleOcrFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setSelectedFileName(file.name);
     await runOcrMultiPass(file);
+  };
+
+  const runExternalSearch = async (query: string) => {
+    setIsSearchingCandidates(true);
+    setExternalSearchStatus(null);
+    setGoogleSearchStatus(null);
+    setOpenLibrarySearchStatus(null);
+    setExternalTabMode(true);
+    try {
+      const queries = buildSearchQueries(query);
+      const lookupQueries = queries.length > 0 ? queries : [query];
+      const searchSource = async (
+        source: "google_books" | "open_library",
+        setList: (items: Candidate[]) => void,
+        setStatus: (status: string) => void
+      ) => {
+        for (let i = 0; i < lookupQueries.length; i += 1) {
+          setStatus(`Searching "${lookupQueries[i]}"...`);
+          const response = await apiFetch<{ data: Candidate[] }>(
+            `/api/books/search?q=${encodeURIComponent(
+              lookupQueries[i]
+            )}&force_external=true&source=${source}`
+          );
+          if (response.data.length > 0) {
+            const sources = Array.from(
+              new Set(
+                response.data.map((item) => item.source.replace(/_/g, " ").toUpperCase())
+              )
+            ).join(", ");
+            setList(response.data);
+            setStatus(`Found ${response.data.length} from ${sources}.`);
+            setLastSearchQuery(lookupQueries[i]);
+            return true;
+          }
+        }
+        setList([]);
+        setStatus(`No results for "${query}".`);
+        return false;
+      };
+
+      const [googleFound, openLibraryFound] = await Promise.all([
+        searchSource("google_books", setGoogleCandidates, (status) =>
+          setGoogleSearchStatus(status)
+        ),
+        searchSource("open_library", setOpenLibraryCandidates, (status) =>
+          setOpenLibrarySearchStatus(status)
+        )
+      ]);
+
+      if (!googleFound && !openLibraryFound) {
+        setExternalSearchStatus(`No external results for "${query}".`);
+      }
+      setHasDbCandidates(false);
+      setShowCandidates(true);
+    } catch {
+      setOcrError("Search failed. Try again.");
+      setExternalSearchStatus("Search failed.");
+    } finally {
+      setIsSearchingCandidates(false);
+    }
   };
 
   const searchCandidates = async () => {
@@ -411,6 +487,7 @@ export default function OcrPage() {
       return;
     }
     setLastSearchQuery(query);
+    setExternalTabMode(false);
     await fetchCandidates(query);
   };
 
@@ -421,10 +498,35 @@ export default function OcrPage() {
         `/api/books/search?q=${encodeURIComponent(query)}`
       );
       setCandidates(response.data);
-      setHasDbCandidates(response.data.some((candidate) => candidate.source === "db"));
+      const hasDb = response.data.some((candidate) => candidate.source === "db");
+      const google = response.data.filter((candidate) => candidate.source === "google_books");
+      const openLibrary = response.data.filter((candidate) => candidate.source === "open_library");
+      const hasExternal = google.length > 0 || openLibrary.length > 0;
+      setHasDbCandidates(hasDb);
       setLastSearchQuery(query);
       setExternalSearchStatus(null);
+      if (hasExternal && !hasDb) {
+        setExternalTabMode(true);
+        setGoogleCandidates(google);
+        setOpenLibraryCandidates(openLibrary);
+        setGoogleSearchStatus(
+          google.length > 0 ? `Found ${google.length} from GOOGLE BOOKS.` : "No results."
+        );
+        setOpenLibrarySearchStatus(
+          openLibrary.length > 0 ? `Found ${openLibrary.length} from OPEN LIBRARY.` : "No results."
+        );
+        if (openLibrary.length === 0) {
+          void runExternalSearch(query);
+        }
+      } else {
+        setExternalTabMode(false);
+        setGoogleSearchStatus(null);
+        setOpenLibrarySearchStatus(null);
+      }
       setShowCandidates(true);
+      if (response.data.length === 0) {
+        await runExternalSearch(query);
+      }
     } catch {
       setOcrError("Search failed. Try again.");
     } finally {
@@ -438,40 +540,7 @@ export default function OcrPage() {
       setOcrError("No text extracted. Try again.");
       return;
     }
-    setIsSearchingCandidates(true);
-    setExternalSearchStatus(null);
-    try {
-      const queries = buildSearchQueries(query);
-      const lookupQueries = queries.length > 0 ? queries : [query];
-      for (let i = 0; i < lookupQueries.length; i += 1) {
-        setExternalSearchStatus(`Searching "${lookupQueries[i]}"...`);
-        const response = await apiFetch<{ data: Candidate[] }>(
-          `/api/books/search?q=${encodeURIComponent(lookupQueries[i])}&force_external=true`
-        );
-        if (response.data.length > 0) {
-          const sources = Array.from(
-            new Set(
-              response.data.map((item) => item.source.replace(/_/g, " ").toUpperCase())
-            )
-          ).join(", ");
-          setCandidates(response.data);
-          setHasDbCandidates(false);
-          setLastSearchQuery(lookupQueries[i]);
-          setExternalSearchStatus(`Found ${response.data.length} from ${sources}.`);
-          setShowCandidates(true);
-          return;
-        }
-      }
-      setCandidates([]);
-      setHasDbCandidates(false);
-      setExternalSearchStatus(`No external results for "${query}".`);
-      setShowCandidates(true);
-    } catch {
-      setOcrError("Search failed. Try again.");
-      setExternalSearchStatus("Search failed.");
-    } finally {
-      setIsSearchingCandidates(false);
-    }
+    await runExternalSearch(query);
   };
 
   const searchWithFallback = async (queries: string[]) => {
@@ -484,6 +553,7 @@ export default function OcrPage() {
           setCandidates(response.data);
           setHasDbCandidates(response.data.some((candidate) => candidate.source === "db"));
           setLastSearchQuery(queries[i]);
+          setExternalTabMode(false);
           setShowCandidates(true);
           return;
         }
@@ -493,6 +563,7 @@ export default function OcrPage() {
     }
     setCandidates([]);
     setHasDbCandidates(false);
+    setExternalTabMode(false);
     setShowCandidates(true);
   };
 
@@ -630,6 +701,12 @@ export default function OcrPage() {
     );
   }
 
+  const displayedCandidates = externalTabMode
+    ? externalTab === "google_books"
+      ? googleCandidates
+      : openLibraryCandidates
+    : candidates;
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] px-4 pb-24 pt-6">
       <div className="mx-auto flex max-w-screen-md flex-col gap-4">
@@ -714,14 +791,31 @@ export default function OcrPage() {
             </div>
 
             {captureMode === "file" ? (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleOcrFile}
-                className="text-xs"
-              />
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleOcrFile}
+                  className="hidden"
+                />
+                <button
+                  className="flex w-full items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-left text-xs font-semibold text-blue-700 shadow-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={ocrRunning}
+                >
+                  <span>
+                    {selectedFileName ? `Selected: ${selectedFileName}` : "Upload image file"}
+                  </span>
+                  <span className="rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+                    Browse
+                  </span>
+                </button>
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  PNG or JPG, recommended 2–5 MB.
+                </p>
+              </div>
             ) : (
               <>
                 <div className="flex gap-2 text-xs">
@@ -782,14 +876,52 @@ export default function OcrPage() {
                 Close
               </button>
             </div>
-              {externalSearchStatus ? (
+              {externalTabMode ||
+              googleCandidates.length > 0 ||
+              openLibraryCandidates.length > 0 ||
+              googleSearchStatus ||
+              openLibrarySearchStatus ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex gap-2 text-xs">
+                    <button
+                      className={`rounded-full border px-3 py-1 ${
+                        externalTab === "google_books"
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-300 text-neutral-600"
+                      }`}
+                      onClick={() => setExternalTab("google_books")}
+                    >
+                      Google Books
+                    </button>
+                    <button
+                      className={`rounded-full border px-3 py-1 ${
+                        externalTab === "open_library"
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-300 text-neutral-600"
+                      }`}
+                      onClick={() => setExternalTab("open_library")}
+                    >
+                      Open Library
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-[11px] text-neutral-500">
+                    {googleSearchStatus ? (
+                      <p>Google Books: {googleSearchStatus}</p>
+                    ) : null}
+                    {openLibrarySearchStatus ? (
+                      <p>Open Library: {openLibrarySearchStatus}</p>
+                    ) : null}
+                    {externalSearchStatus ? <p>{externalSearchStatus}</p> : null}
+                  </div>
+                </div>
+              ) : externalSearchStatus ? (
                 <p className="mt-2 text-[11px] text-neutral-500">{externalSearchStatus}</p>
               ) : null}
               <div className="mt-3 space-y-2 text-sm">
-                {candidates.length === 0 ? (
+                {displayedCandidates.length === 0 ? (
                   <p className="text-xs text-neutral-600">No candidates found.</p>
                 ) : (
-                  candidates.map((candidate, index) => (
+                  displayedCandidates.map((candidate, index) => (
                     <button
                       key={`${candidate.title}-${candidate.author}-${index}`}
                       className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-left"
